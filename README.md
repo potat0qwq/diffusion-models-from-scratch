@@ -142,12 +142,12 @@ $$
 \mathbb{E}_{x_0,t,\epsilon}
 \left[
 \left\|
-\epsilon -
-\epsilon_\theta(x_t,t)
+\epsilon - \epsilon_\theta(x_t,t)
 \right\|^2
 \right]
 $$
 
+---
 ## DDPM Sampling
 
 The project implements the iterative DDPM reverse process.
