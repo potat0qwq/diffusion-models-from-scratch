@@ -136,7 +136,7 @@ $$
 
 The training objective is the standard noise prediction objective:
 
-$$
+```math
 \mathcal{L}
 =
 \mathbb{E}_{x_0,t,\epsilon}
@@ -145,7 +145,7 @@ $$
 \epsilon - \epsilon_\theta(x_t,t)
 \right\|^2
 \right]
-$$
+```
 
 ---
 ## DDPM Sampling
