@@ -149,26 +149,27 @@ class DDIM(nn.Module):
                     / torch.sqrt(1.0 - alpha_bar_t)
                 ) / torch.sqrt(alpha_t)
 
-                # Reverse-process noise scale
-                sigma_t = torch.sqrt(
-                    1.0 - self.alpha[t]
-                )
+                # Add stochastic noise except at the final step
+                if t > 0:
+                    sigma_t = torch.sqrt(
+                        1.0 - self.alpha[t]
+                    )
 
-                # Add stochastic Gaussian noise
-                z = torch.randn_like(x)
+                    z = torch.randn_like(x)
 
-                x = x_mean + sigma_t * z
+                    x = x_mean + sigma_t * z
+                else:
+                    x = x_mean
 
                 if return_trajectory:
                     trajectory.append(
-                        x_mean.detach().cpu().clone()
+                        x.detach().cpu().clone()
                     )
 
             if return_trajectory:
                 return trajectory
 
-            # Return x_mean to avoid adding noise at the final step
-            return x_mean
+            return x
 
     def ddim_sample(
         self,

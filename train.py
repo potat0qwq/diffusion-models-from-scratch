@@ -1,10 +1,11 @@
 import os
+import numpy as np
 import torch
 
 from models.unet import BasicDiscreteTimeModel
 from diffusion.ddim import DDIM
 from utils.trainer import train
-from utils.visualization import save_all_results
+from utils.visualization import save_loss_curve
 
 
 # =========================
@@ -17,10 +18,18 @@ n_layers = 2
 
 batch_size = 128
 n_epochs = 400
-sample_size = 512
 
 seed = 42
 
+# =========================
+# Reproducibility
+# =========================
+
+np.random.seed(seed)
+torch.manual_seed(seed)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
 
 # =========================
 # Device
@@ -61,12 +70,11 @@ diffuser = DDIM(
 # Training
 # =========================
 
-losses, ddpm_samples, ddim_samples = train(
+losses = train(
     model=model,
     diffuser=diffuser,
     batch_size=batch_size,
     n_epochs=n_epochs,
-    sample_size=sample_size,
     seed=seed,
 )
 
@@ -92,11 +100,7 @@ torch.save(
 # Save Results
 # =========================
 
-save_all_results(
-    losses,
-    ddpm_samples,
-    ddim_samples,
-)
+save_loss_curve(losses)
 
 
 print("\nTraining finished!")

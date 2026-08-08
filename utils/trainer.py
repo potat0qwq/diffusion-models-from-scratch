@@ -11,7 +11,6 @@ def train(
     diffuser: nn.Module,
     batch_size: int = 128,
     n_epochs: int = 400,
-    sample_size: int = 512,
     seed: int = 42,
 ):
     """
@@ -39,6 +38,7 @@ def train(
     X = make_swiss_roll(
         n_samples=N,
         noise=1e-1,
+        random_state=seed,
     )[0][:, [0, 2]] / 10.0
 
     # Optimizer
@@ -48,8 +48,6 @@ def train(
     )
 
     losses = []
-    ddpm_samples = []
-    ddim_samples = []
 
     with tqdm(total=n_epochs) as pbar:
         for epoch in range(n_epochs):
@@ -102,27 +100,4 @@ def train(
                 f"| Loss {avg_loss:.4f}"
             )
 
-            # Generate samples for visualization.
-            ddpm_sample = diffuser.ddpm_sample(
-                model,
-                n_samples=sample_size,
-            )
-
-            ddim_sample = diffuser.ddim_sample(
-                model,
-                n_samples=sample_size,
-            )
-
-            ddpm_samples.append(
-                ddpm_sample.detach().cpu()
-            )
-
-            ddim_samples.append(
-                ddim_sample.detach().cpu()
-            )
-
-    return (
-        losses,
-        ddpm_samples,
-        ddim_samples,
-    )
+    return losses
