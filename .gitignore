@@ -219,3 +219,6 @@ __marimo__/
 
 # Model checkpoints
 checkpoints/
+
+results/ddpm.gif
+results/ddim.gif

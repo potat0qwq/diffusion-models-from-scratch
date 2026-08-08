@@ -276,7 +276,7 @@ diffusion-models-from-scratch/
 ### 1. Clone the Repository
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone https://github.com/potat0qwq/diffusion-models-from-scratch.git
 cd diffusion-models-from-scratch
 ```
 ### 2. Create a Virtual Environment

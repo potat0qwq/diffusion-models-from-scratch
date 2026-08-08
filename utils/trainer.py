@@ -5,24 +5,43 @@ import torch.nn as nn
 from sklearn.datasets import make_swiss_roll
 from tqdm import tqdm
 
+
 def train(
     model: nn.Module,
-    diffuser,
+    diffuser: nn.Module,
     batch_size: int = 128,
     n_epochs: int = 400,
     sample_size: int = 512,
     seed: int = 42,
 ):
+    """
+    Train the diffusion noise-prediction model.
+
+    The training device is inferred from the model parameters,
+    allowing the same code to run on either CPU or CUDA.
+    """
+
+    # Reproducibility
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    # Dataset
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # Infer device from model
+    device = next(model.parameters()).device
+
+    print(f"Training on device: {device}")
+
+    # Generate 2D Swiss Roll dataset
     N = 1024
+
     X = make_swiss_roll(
         n_samples=N,
-        noise=1e-1
+        noise=1e-1,
     )[0][:, [0, 2]] / 10.0
 
+    # Optimizer
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=1e-3,
@@ -33,22 +52,24 @@ def train(
     ddim_samples = []
 
     with tqdm(total=n_epochs) as pbar:
-
         for epoch in range(n_epochs):
 
+            # Shuffle training data
             ids = np.random.choice(
                 N,
                 N,
                 replace=False,
             )
 
-            loss_epoch = []
+            epoch_losses = []
 
-            for i in range(0, N, batch_size):
+            for i in range(0, len(ids), batch_size):
 
+                # Move training batch directly to CPU / CUDA
                 x = torch.tensor(
                     X[ids[i:i + batch_size]],
                     dtype=torch.float32,
+                    device=device,
                 )
 
                 optimizer.zero_grad()
@@ -62,29 +83,46 @@ def train(
 
                 optimizer.step()
 
-                loss_epoch.append(loss.item())
-
-            avg_loss = np.mean(loss_epoch)
-
-            losses.append(avg_loss)
-
-            ddpm_samples.append(
-                diffuser.ddpm_sample(
-                    model,
-                    n_samples=sample_size,
+                epoch_losses.append(
+                    loss.item()
                 )
+
+            avg_loss = np.mean(
+                epoch_losses
             )
 
-            ddim_samples.append(
-                diffuser.ddim_sample(
-                    model,
-                    n_samples=sample_size,
-                )
+            losses.append(
+                avg_loss
             )
 
             pbar.update(1)
+
             pbar.set_description(
-                f"Epoch {epoch} | Loss {avg_loss:.4f}"
+                f"Epoch {epoch + 1}/{n_epochs} "
+                f"| Loss {avg_loss:.4f}"
             )
 
-    return losses, ddpm_samples, ddim_samples
+            # Generate samples for visualization.
+            ddpm_sample = diffuser.ddpm_sample(
+                model,
+                n_samples=sample_size,
+            )
+
+            ddim_sample = diffuser.ddim_sample(
+                model,
+                n_samples=sample_size,
+            )
+
+            ddpm_samples.append(
+                ddpm_sample.detach().cpu()
+            )
+
+            ddim_samples.append(
+                ddim_sample.detach().cpu()
+            )
+
+    return (
+        losses,
+        ddpm_samples,
+        ddim_samples,
+    )

@@ -1,41 +1,65 @@
 import os
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
+
 from models.unet import BasicDiscreteTimeModel
 from diffusion.ddim import DDIM
 from utils.trainer import train
 from utils.visualization import save_all_results
 
-# ======================
-# Hyperparameters
-# ======================
+
+# =========================
+# Configuration
+# =========================
 
 n_steps = 100
 d_model = 128
 n_layers = 2
 
 batch_size = 128
-n_epochs = 401
+n_epochs = 400
 sample_size = 512
+
 seed = 42
 
-# ======================
-# Build model
-# ======================
+
+# =========================
+# Device
+# =========================
+
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
+
+print(f"Using device: {device}")
+
+if device.type == "cuda":
+    print(
+        f"GPU: {torch.cuda.get_device_name(0)}"
+    )
+
+
+# =========================
+# Model
+# =========================
 
 model = BasicDiscreteTimeModel(
     d_model=d_model,
     n_layers=n_layers,
-)
+).to(device)
+
+
+# =========================
+# Diffusion Process
+# =========================
 
 diffuser = DDIM(
     n_steps=n_steps,
-)
+).to(device)
 
-# ======================
-# Train
-# ======================
+
+# =========================
+# Training
+# =========================
 
 losses, ddpm_samples, ddim_samples = train(
     model=model,
@@ -46,22 +70,34 @@ losses, ddpm_samples, ddim_samples = train(
     seed=seed,
 )
 
-# ======================
-# Save checkpoint
-# ======================
 
-os.makedirs("checkpoints", exist_ok=True)
+# =========================
+# Save Checkpoint
+# =========================
+
+os.makedirs(
+    "checkpoints",
+    exist_ok=True,
+)
 
 checkpoint_path = "checkpoints/model.pth"
 
-torch.save(model.state_dict(), checkpoint_path)
+torch.save(
+    model.state_dict(),
+    checkpoint_path,
+)
 
-# Save figures
+
+# =========================
+# Save Results
+# =========================
+
 save_all_results(
     losses,
     ddpm_samples,
     ddim_samples,
 )
+
 
 print("\nTraining finished!")
 print(f"Model saved to: {checkpoint_path}")
