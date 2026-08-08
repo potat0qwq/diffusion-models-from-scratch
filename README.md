@@ -61,7 +61,8 @@ The original 3D Swiss Roll is projected onto two dimensions and normalized befor
 ```python
 X = make_swiss_roll(
     n_samples=N,
-    noise=1e-1
+    noise=1e-1,
+    random_state=seed,
 )[0][:, [0, 2]] / 10.0
 ```
 The low-dimensional dataset makes it possible to directly visualize the diffusion and generation processes.
@@ -285,7 +286,7 @@ cd diffusion-models-from-scratch
 Windows
 ```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 ```
 Linux / macOS
 ```bash
@@ -402,18 +403,6 @@ n_steps = 100
 ```
 
 ---
-### Diffusion Schedule
-
-The current implementation uses a linear beta schedule:
-
-```text
-beta_min = 1e-5
-beta_max = 5e-3
-```
-The number of diffusion steps can be changed through:
-```python
-n_steps = 100
-```
 ## Reproducibility
 
 The training pipeline sets random seeds for NumPy, PyTorch, and CUDA when available:
