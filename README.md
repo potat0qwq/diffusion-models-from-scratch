@@ -231,31 +231,32 @@ The following animation shows the deterministic DDIM reverse diffusion process u
 
 ```text
 diffusion-models-from-scratch/
-│
 ├── checkpoints/
-│   └── model.pth
-│
+│   └── model.pth              # Generated after training (gitignored)
 ├── diffusion/
+│   ├── __init__.py
 │   └── ddim.py
-│
 ├── models/
+│   ├── __init__.py
 │   ├── embedding.py
 │   └── unet.py
-│
-├── utils/
-│   ├── trainer.py
-│   └── visualization.py
-│
+├── notebooks/
+│   └── demo.ipynb
 ├── results/
+│   ├── loss.npy
 │   ├── loss.png
 │   ├── ddpm_reverse.gif
 │   └── ddim_reverse.gif
-│
+├── utils/
+│   ├── __init__.py
+│   ├── trainer.py
+│   └── visualization.py
 ├── train.py
 ├── sample.py
 ├── requirements.txt
 ├── .gitignore
-└── README.md
+├── README.md
+└── LICENSE
 ```
 
 ### Main Components
@@ -263,12 +264,13 @@ diffusion-models-from-scratch/
 | File | Description |
 |---|---|
 | `models/embedding.py` | Sinusoidal timestep positional encoding |
-| `models/unet.py` | Noise prediction network and residual blocks |
-| `diffusion/ddim.py` | Diffusion process, DDPM and DDIM sampling |
-| `utils/trainer.py` | Dataset preparation and training loop |
-| `utils/visualization.py` | Loss curves and sampling animations |
+| `models/unet.py` | Timestep-conditioned noise prediction network |
+| `diffusion/ddim.py` | Diffusion process, training objective, DDPM and DDIM sampling |
+| `utils/trainer.py` | Swiss Roll dataset preparation and training loop |
+| `utils/visualization.py` | Loss curve and sampling visualization utilities |
 | `train.py` | Training entry point and checkpoint saving |
-| `sample.py` | Checkpoint loading and reverse diffusion sampling |
+| `sample.py` | Checkpoint loading and reverse diffusion visualization |
+| `notebooks/demo.ipynb` | End-to-end demo using the modular project implementation |
 
 ---
 ## Installation
@@ -295,6 +297,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 ---
+### CUDA Support
+
+The project automatically uses CUDA when a compatible NVIDIA GPU and a CUDA-enabled PyTorch installation are available.
+
+You can check CUDA availability with:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+The current implementation has been tested with:
+
+- Python 3.12
+- PyTorch 2.13.0
+- CUDA 13.0
+
+If CUDA is not available, the project automatically falls back to CPU.
+
+---
 ## Training
 
 Run:
@@ -302,21 +323,29 @@ Run:
 ```bash
 python train.py
 ```
+
 The training script:
-1. Generates the Swiss Roll dataset.
-2. Initializes the noise prediction model.
-3. Initializes the diffusion process.
-4. Trains the model using the noise prediction objective.
-5. Records the training loss.
-6. Saves the trained model checkpoint.
+
+1. Sets the random seed for reproducibility.
+2. Generates the 2D Swiss Roll dataset.
+3. Initializes the noise prediction model and diffusion process.
+4. Automatically selects CPU or CUDA.
+5. Trains the model using the noise prediction objective.
+6. Records the training loss.
+7. Saves the trained model checkpoint.
+
 The trained model is saved to:
+
 ```text
 checkpoints/model.pth
 ```
+
 The loss curve is saved to:
+
 ```text
 results/loss.png
 ```
+
 ---
 ## Sampling
 
@@ -340,19 +369,39 @@ results/ddim_reverse.gif
 ```
 ## Configuration
 
-The main hyperparameters can be modified in `train.py` and `sample.py`.
+### Training Configuration
 
-Default training configuration:
+```text
+n_steps    = 100
+d_model    = 128
+n_layers   = 2
+batch_size = 128
+n_epochs   = 400
+seed       = 42
+```
+
+### Sampling Configuration
+
+```text
+n_samples = 512
+```
+
+### Diffusion Schedule
+
+The current implementation uses a linear beta schedule:
+
+```text
+beta_min = 1e-5
+beta_max = 5e-3
+```
+
+The number of diffusion steps can be changed through:
 
 ```python
 n_steps = 100
-d_model = 128
-n_layers = 2
-batch_size = 128
-n_epochs = 400
-sample_size = 512
-seed = 42
 ```
+
+---
 ### Diffusion Schedule
 
 The current implementation uses a linear beta schedule:
@@ -367,15 +416,21 @@ n_steps = 100
 ```
 ## Reproducibility
 
-The training pipeline sets random seeds for NumPy and PyTorch:
+The training pipeline sets random seeds for NumPy, PyTorch, and CUDA when available:
 
 ```python
 np.random.seed(seed)
 torch.manual_seed(seed)
-```
-This improves reproducibility across runs.
 
-Exact numerical results may still vary depending on the hardware and execution environment.
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+```
+
+The Swiss Roll dataset is also generated using a fixed `random_state`.
+
+This improves reproducibility across runs. Exact numerical results may still vary depending on the hardware and execution environment.
+
+---
 ## Design Choices
 
 ### Why Use a 2D Dataset?
