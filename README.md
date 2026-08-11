@@ -1,477 +1,247 @@
 # Diffusion Models from Scratch
 
-A PyTorch implementation of diffusion models from scratch, focusing on the core mechanics of **DDPM** and **DDIM** on a 2D Swiss Roll dataset.
+> A compact PyTorch implementation of **DDPM** and **DDIM** on a 2D Swiss Roll—small enough to read end to end, yet complete enough to train, sample, and visualize every reverse-diffusion step.
 
-The project implements the forward diffusion process, noise prediction model, DDPM sampling, DDIM sampling, training pipeline, checkpointing, and reverse diffusion visualization.
+This repository focuses on the mechanics behind diffusion models: the noise schedule, timestep conditioning, noise-prediction objective, and two different reverse samplers. It uses no high-level diffusion library.
 
+<table>
+  <tr>
+    <th>DDPM · 100 stochastic updates</th>
+    <th>DDIM · 20 selected time levels, η = 0</th>
+  </tr>
+  <tr>
+    <td><img src="results/ddpm_reverse.gif" alt="DDPM reverse diffusion animation" width="100%"></td>
+    <td><img src="results/ddim_reverse.gif" alt="DDIM reverse diffusion animation" width="100%"></td>
+  </tr>
+</table>
 
-## Overview
+## At a glance
 
-Diffusion models learn to generate data by gradually removing noise from a noisy sample.
+| | Default experiment |
+|---|---|
+| Data | 1,024 points from a normalized 2D Swiss Roll |
+| Model | Timestep-conditioned residual MLP |
+| Diffusion schedule | 100 steps, linear β from `1e-5` to `5e-3` |
+| Training | 400 epochs, batch size 128, Adam with learning rate `1e-3` |
+| Sampling | 512 generated points with both DDPM and DDIM |
+| Runtime | Automatically selects CUDA when available, otherwise CPU |
 
-This project provides a minimal and modular implementation of the diffusion pipeline:
+## Why this project?
 
-```text
-Data
-  │
-  ▼
-Swiss Roll
-  │
-  ▼
-Forward Diffusion
-x₀ → xₜ
-  │
-  ▼
-Noise Prediction Model
-εθ(xₜ, t)
-  │
-  ▼
-Reverse Diffusion
-  │
-  ├── DDPM Sampling
-  │
-  └── DDIM Sampling
-  │
-  ▼
-Generated Samples
-```
-
-## Features
-
-- PyTorch implementation of a discrete-time diffusion model
-- Forward diffusion with a linear beta schedule
-- Sinusoidal timestep positional encoding
-- Residual noise prediction network
-- DDPM reverse sampling
-- DDIM reverse sampling
-- Configurable diffusion steps
-- Training loss visualization
-- Reverse diffusion trajectory visualization
-- Model checkpoint saving and loading
-- CPU / CUDA support
-- Separate training and inference scripts
-
-
-## Dataset
-
-The model is trained on a 2D Swiss Roll dataset generated using `scikit-learn`.
-
-The original 3D Swiss Roll is projected onto two dimensions and normalized before training.
-
-```python
-X = make_swiss_roll(
-    n_samples=N,
-    noise=1e-1,
-    random_state=seed,
-)[0][:, [0, 2]] / 10.0
-```
-The low-dimensional dataset makes it possible to directly visualize the diffusion and generation processes.
-
-## Model Architecture
-
-The noise prediction model is a lightweight MLP with timestep conditioning.
+Image diffusion models make the reverse process difficult to inspect directly. A 2D distribution keeps the same core objective while making each stage visible:
 
 ```text
-xₜ ∈ R²
- │
- ▼
-Linear(2 → d_model)
- │
- ▼
-Residual Block
- │
- ├── Timestep Positional Encoding
- ├── Linear
- ├── GELU
- ├── Linear
- └── LayerNorm + Residual Connection
- │
- ▼
-Residual Block
- │
- ▼
-Linear(d_model → 2)
- │
- ▼
-Predicted Noise εθ(xₜ, t)
-```
-### Default Configuration
-```python
-d_model  = 128
-n_layers = 2
-n_steps  = 100
-```
-The timestep `t` is represented using sinusoidal positional encoding and injected into each residual block.
-
-## Diffusion Process
-
-The forward diffusion process gradually adds Gaussian noise to the original data.
-
-For timestep `t`:
-
-$$
-x_t =
-\sqrt{\bar{\alpha}_t}x_0
-+
-\sqrt{1-\bar{\alpha}_t}\epsilon
-$$
-
-where
-
-$$
-\epsilon \sim \mathcal{N}(0,I)
-$$
-
-and
-
-$$
-\bar{\alpha}_t =
-\prod_{s=1}^{t}\alpha_s
-$$
-
-The model learns to predict the noise added to the sample:
-
-$$
-\epsilon_\theta(x_t,t)
-$$
-
-The training objective is the standard noise prediction objective:
-
-```math
-\mathcal{L}
-=
-\mathbb{E}_{x_0,t,\epsilon}
-\left[
-\left\|
-\epsilon - \epsilon_\theta(x_t,t)
-\right\|^2
-\right]
+Swiss Roll x₀ ──add noise──▶ xₜ ──predict ε──▶ reverse sampler ──▶ generated x̂₀
+                                                ├─ DDPM
+                                                └─ DDIM
 ```
 
----
-## DDPM Sampling
+The repository is intentionally narrow and modular, so it is useful for:
 
-The project implements the iterative DDPM reverse process.
+- understanding the equations alongside their PyTorch implementation;
+- comparing stochastic DDPM and deterministic DDIM sampling;
+- inspecting the full path from Gaussian noise to a learned distribution;
+- experimenting with schedules, model width, depth, and sampling steps.
 
-Starting from Gaussian noise:
+## Quick start
 
-```text
-x_T
- │
- ▼
-x_{T-1}
- │
- ▼
-x_{T-2}
- │
- ▼
-...
- │
- ▼
-x_1
- │
- ▼
-x_0
+### 1. Set up the environment
+
+```bash
+git clone https://github.com/potat0qwq/diffusion-models-from-scratch.git
+cd diffusion-models-from-scratch
+python -m venv .venv
 ```
-At each timestep, the model predicts the noise component and updates the current sample.
 
-The implementation can optionally record the entire reverse diffusion trajectory for visualization.
+Activate the environment:
 
-## DDIM Sampling
-
-The project also implements DDIM sampling.
-
-Instead of using every diffusion timestep, DDIM selects a smaller set of timesteps for the reverse process.
-
-The current implementation uses up to 20 sampling steps:
-
-```python
-ddim_steps = min(20, self.n_steps)
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 ```
-The sampler uses the deterministic setting:
-```python
-η = 0
+
+```bash
+# Linux / macOS
+source .venv/bin/activate
 ```
-This allows the reverse process to be visualized with substantially fewer sampling steps than the full DDPM trajectory.
 
-## DDPM vs DDIM
+Install the dependencies:
 
-DDPM and DDIM use the same trained noise prediction model but differ in their reverse sampling procedures.
+```bash
+python -m pip install -r requirements.txt
+```
 
-| Method | Steps | Stochastic | Behavior |
-|---|---:|---|---|
-| DDPM | 100 | Yes | Full reverse diffusion |
-| DDIM | ≤ 20 | No (`η = 0`) | Deterministic |
+The project requires PyTorch 2.0 or newer, NumPy, Matplotlib, scikit-learn, tqdm, and Pillow. A CUDA-enabled PyTorch build is optional.
 
-The project implements both methods using the same trained noise prediction model, allowing their reverse diffusion trajectories to be compared directly.
+### 2. Train
+
+```bash
+python train.py
+```
+
+Training creates:
+
+- `checkpoints/model.pth` — model weights;
+- `results/loss.npy` — raw per-epoch loss values;
+- `results/loss.png` — rendered loss curve.
+
+### 3. Sample
+
+```bash
+python sample.py
+```
+
+This loads `checkpoints/model.pth` and writes:
+
+- `results/ddpm_reverse.gif`;
+- `results/ddim_reverse.gif`.
+
+> The repository does not include a pretrained checkpoint. Run `train.py` before `sample.py`.
+
+### 4. Explore the notebook (optional)
+
+[`notebooks/demo.ipynb`](notebooks/demo.ipynb) reproduces the full workflow interactively and adds plots of the dataset, final samples, and intermediate reverse-diffusion states.
+
+Jupyter is not part of the runtime dependencies. To use the notebook:
+
+```bash
+python -m pip install jupyterlab
+jupyter lab notebooks/demo.ipynb
+```
 
 ## Results
 
-### Training Loss
+### Training loss
 
-The training loss is saved to:
+![Training loss over 400 epochs](results/loss.png)
 
-`results/loss.png`
+In the included run, the epoch loss falls from **0.9992** to **0.6704**, with a minimum of **0.5776**. The remaining variation is expected because every batch uses newly sampled timesteps and Gaussian noise.
 
-![Training Loss](results/loss.png)
+### Sampler comparison
 
-### DDPM Reverse Diffusion
+Both samplers use the same trained noise-prediction network but follow different reverse paths.
 
-The following animation shows the DDPM reverse diffusion process, starting from Gaussian noise and progressively generating samples from the learned distribution.
+| | DDPM | DDIM |
+|---|---|---|
+| Reverse path | All 100 diffusion steps | Up to 20 selected time levels (19 jumps by default) |
+| Randomness | Adds noise at every step except the last | Deterministic after the initial Gaussian draw (`η = 0`) |
+| Recorded trajectory | 101 states | 20 states |
+| Included result | Clean fit to the Swiss Roll | Faster path with a few visible outliers |
 
-![DDPM Reverse Diffusion](results/ddpm_reverse.gif)
+These plots demonstrate the trade-off in this small experiment; they are not a general benchmark of DDPM versus DDIM.
 
-### DDIM Reverse Diffusion
+## How it works
 
-The following animation shows the deterministic DDIM reverse diffusion process using a reduced number of sampling steps.
+### Forward diffusion
 
-![DDIM Reverse Diffusion](results/ddim_reverse.gif)
+For a clean point `x₀`, a timestep `t`, and Gaussian noise `ε ~ N(0, I)`, the implementation samples the noisy point directly:
 
----
-## Project Structure
+$$
+x_t = \sqrt{\bar{\alpha}_t}\,x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,
+\qquad
+\bar{\alpha}_t = \prod_{s=0}^{t}\alpha_s,
+\qquad
+\alpha_t = 1-\beta_t.
+$$
+
+The model learns to recover the sampled noise with mean-squared error:
+
+$$
+\mathcal{L} = \mathbb{E}_{x_0,t,\epsilon}
+\left[\left\|\epsilon-\epsilon_\theta(x_t,t)\right\|_2^2\right].
+$$
+
+### Noise-prediction model
+
+The model is a small residual MLP rather than an image U-Net:
+
+```text
+xₜ ∈ ℝ²
+  │
+  ▼
+Linear(2 → 128)
+  │
+  ├─ Residual block + sinusoidal timestep embedding
+  ├─ Residual block + sinusoidal timestep embedding
+  │
+  ▼
+Linear(128 → 2)
+  │
+  ▼
+predicted noise εθ(xₜ, t)
+```
+
+Each residual block contains two linear layers, GELU activation, and LayerNorm. The timestep embedding is added inside every block.
+
+### Reverse sampling
+
+- **DDPM** evaluates every timestep in reverse and adds stochastic noise for all non-final updates. This implementation uses `σₜ = √βₜ`.
+- **DDIM** selects evenly spaced time levels with `numpy.linspace` and applies the deterministic `η = 0` update. With the default schedule, 20 selected levels produce 19 reverse jumps.
+
+## Configuration
+
+The project deliberately keeps configuration near the top of the two entry-point scripts.
+
+| Parameter | Default | Change in |
+|---|---:|---|
+| `n_steps` | 100 | `train.py`, `sample.py` |
+| `d_model` | 128 | `train.py`, `sample.py` |
+| `n_layers` | 2 | `train.py`, `sample.py` |
+| `batch_size` | 128 | `train.py` |
+| `n_epochs` | 400 | `train.py` |
+| `seed` | 42 | `train.py` |
+| `n_samples` | 512 | `sample.py` |
+| `beta_min`, `beta_max` | `1e-5`, `5e-3` | `diffusion/ddim.py` constructor defaults |
+
+When loading a checkpoint, `d_model` and `n_layers` in `sample.py` must match the values used for training. Keep `n_steps` aligned as well so the sampler uses the intended schedule.
+
+## Project structure
 
 ```text
 diffusion-models-from-scratch/
-├── checkpoints/
-│   └── model.pth              # Generated after training (gitignored)
 ├── diffusion/
-│   ├── __init__.py
-│   └── ddim.py
+│   └── ddim.py              # Forward process, loss, DDPM and DDIM samplers
 ├── models/
-│   ├── __init__.py
-│   ├── embedding.py
-│   └── unet.py
+│   ├── embedding.py         # Sinusoidal timestep encoding
+│   └── unet.py              # Residual 2D noise-prediction MLP
 ├── notebooks/
-│   └── demo.ipynb
+│   └── demo.ipynb           # End-to-end interactive experiment
 ├── results/
 │   ├── loss.npy
 │   ├── loss.png
 │   ├── ddpm_reverse.gif
 │   └── ddim_reverse.gif
 ├── utils/
-│   ├── __init__.py
-│   ├── trainer.py
-│   └── visualization.py
-├── train.py
-├── sample.py
-├── requirements.txt
-├── .gitignore
-├── README.md
-└── LICENSE
+│   ├── trainer.py           # Dataset generation and training loop
+│   └── visualization.py     # Loss and animation utilities
+├── sample.py                # Load a checkpoint and generate both animations
+├── train.py                 # Train and save the model
+└── requirements.txt
 ```
 
-### Main Components
+The `checkpoints/` directory is created during training and is ignored by Git.
 
-| File | Description |
-|---|---|
-| `models/embedding.py` | Sinusoidal timestep positional encoding |
-| `models/unet.py` | Timestep-conditioned noise prediction network |
-| `diffusion/ddim.py` | Diffusion process, training objective, DDPM and DDIM sampling |
-| `utils/trainer.py` | Swiss Roll dataset preparation and training loop |
-| `utils/visualization.py` | Loss curve and sampling visualization utilities |
-| `train.py` | Training entry point and checkpoint saving |
-| `sample.py` | Checkpoint loading and reverse diffusion visualization |
-| `notebooks/demo.ipynb` | End-to-end demo using the modular project implementation |
-
----
-## Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/potat0qwq/diffusion-models-from-scratch.git
-cd diffusion-models-from-scratch
-```
-### 2. Create a Virtual Environment
-Windows
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-Linux / macOS
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
----
-### CUDA Support
-
-The project automatically uses CUDA when a compatible NVIDIA GPU and a CUDA-enabled PyTorch installation are available.
-
-You can check CUDA availability with:
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"
-```
-
-The current implementation has been tested with:
-
-- Python 3.12
-- PyTorch 2.13.0
-- CUDA 13.0
-
-If CUDA is not available, the project automatically falls back to CPU.
-
----
-## Training
-
-Run:
-
-```bash
-python train.py
-```
-
-The training script:
-
-1. Sets the random seed for reproducibility.
-2. Generates the 2D Swiss Roll dataset.
-3. Initializes the noise prediction model and diffusion process.
-4. Automatically selects CPU or CUDA.
-5. Trains the model using the noise prediction objective.
-6. Records the training loss.
-7. Saves the trained model checkpoint.
-
-The trained model is saved to:
-
-```text
-checkpoints/model.pth
-```
-
-The loss curve is saved to:
-
-```text
-results/loss.png
-```
-
----
-## Sampling
-
-After training, run:
-
-```bash
-python sample.py
-```
-The script:
-1. Builds the same model architecture.
-2. Loads the trained checkpoint.
-3. Runs DDPM reverse sampling.
-4. Runs DDIM reverse sampling.
-5. Records the reverse diffusion trajectories.
-6. Generates GIF visualizations.
-
-The generated animations are saved to:
-```text
-results/ddpm_reverse.gif
-results/ddim_reverse.gif
-```
-## Configuration
-
-### Training Configuration
-
-```text
-n_steps    = 100
-d_model    = 128
-n_layers   = 2
-batch_size = 128
-n_epochs   = 400
-seed       = 42
-```
-
-### Sampling Configuration
-
-```text
-n_samples = 512
-```
-
-### Diffusion Schedule
-
-The current implementation uses a linear beta schedule:
-
-```text
-beta_min = 1e-5
-beta_max = 5e-3
-```
-
-The number of diffusion steps can be changed through:
-
-```python
-n_steps = 100
-```
-
----
 ## Reproducibility
 
-The training pipeline sets random seeds for NumPy, PyTorch, and CUDA when available:
+Training seeds NumPy, PyTorch, CUDA (when available), and scikit-learn's Swiss Roll generator. Exact floating-point results can still differ across hardware and PyTorch builds.
 
-```python
-np.random.seed(seed)
-torch.manual_seed(seed)
+`sample.py` does not set a seed, so each run starts from new Gaussian noise. For repeatable animations, call `torch.manual_seed(...)` (and `torch.cuda.manual_seed_all(...)` on CUDA) before invoking either sampler.
 
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
-```
+## Scope and next steps
 
-The Swiss Roll dataset is also generated using a fixed `random_state`.
+This is an educational 2D implementation, not an image-generation framework. Natural extensions include:
 
-This improves reproducibility across runs. Exact numerical results may still vary depending on the hardware and execution environment.
+- configurable DDIM `η` and sampling-step counts;
+- cosine or learned noise schedules;
+- quantitative distribution metrics;
+- command-line or file-based experiment configuration;
+- image-space U-Nets and classifier-free guidance.
 
----
-## Design Choices
-
-### Why Use a 2D Dataset?
-
-Diffusion models are typically demonstrated on high-dimensional image or text data, but the underlying reverse diffusion process can be difficult to inspect directly.
-
-A 2D Swiss Roll dataset makes the process observable:
-
-```text
-Gaussian Noise
-      ↓
-Noisy Distribution
-      ↓
-Progressive Denoising
-      ↓
-Learned Data Distribution
-```
-This provides an intuitive way to study how the reverse diffusion process evolves.
-### Why Implement Both DDPM and DDIM?
-
-DDPM and DDIM share the same learned noise prediction model but use different reverse sampling procedures.
-
-Implementing both methods makes it possible to directly compare:
-
-- Number of sampling steps
-- Stochastic vs deterministic generation
-- Reverse diffusion trajectories
-- Sampling behavior
-
----
-
-## Future Work
-
-- [ ] Experiment with different beta schedules
-- [ ] Add configurable DDIM `η`
-- [ ] Compare different DDIM sampling step counts
-- [ ] Add quantitative evaluation metrics
-- [ ] Extend the model to image datasets
-- [ ] Implement classifier-free guidance
-- [ ] Add experiment configuration files
-- [ ] Add automated evaluation
-
----
 ## References
 
-1. Ho, J., Jain, A., & Abbeel, P.  
-   *Denoising Diffusion Probabilistic Models.* NeurIPS, 2020.
+- Ho, Jain, and Abbeel, [*Denoising Diffusion Probabilistic Models*](https://arxiv.org/abs/2006.11239), NeurIPS 2020.
+- Song, Meng, and Ermon, [*Denoising Diffusion Implicit Models*](https://arxiv.org/abs/2010.02502), ICLR 2021.
 
-2. Song, J., Meng, C., & Ermon, S.  
-   *Denoising Diffusion Implicit Models.* ICLR, 2021.
-
----
 ## License
 
-This project is released under the MIT License.
+Released under the [MIT License](LICENSE).
